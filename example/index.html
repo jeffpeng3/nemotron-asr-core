@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nemotron 3.5 ASR — on-device</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="importmap">
+    {
+      "imports": {
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/ort.webgpu.mjs"
+      }
+    }
+    </script>
+  </head>
+  <body>
+    <header class="header">
+      <span class="header__badge">WebGPU · On-device</span>
+      <h1 class="header__title">Nemotron 3.5 ASR</h1>
+      <p class="header__subtitle">Multilingual streaming speech recognition</p>
+    </header>
+
+    <div id="webgpuWarning" class="webgpu-warning hidden">
+      WebGPU isn't available in this browser. Use Chrome or Edge (or enable the
+      WebGPU flag).
+    </div>
+
+    <div id="modelLoad" class="model-load">
+      <div style="display:flex;gap:8px;align-items:center;width:100%">
+        <button id="loadBtn" class="btn-action is-start" style="flex:1;margin:0">
+          ⬇ Load model (~750 MB)
+        </button>
+        <label style="display:flex;align-items:center;gap:4px;white-space:nowrap;color:var(--spark-text-secondary);font-size:13px">
+          profile
+          <select id="profile">
+            <option value="TURBO">80ms</option>
+            <option value="FAST">160ms</option>
+            <option value="BALANCED">320ms</option>
+            <option value="NORMAL" selected>560ms</option>
+            <option value="HIGH">1120ms</option>
+          </select>
+        </label>
+      </div>
+      <span class="hint">One-time download (~750 MB), cached on-device.</span>
+    </div>
+
+    <nav class="mode-switch" role="tablist">
+      <button class="mode-btn" data-mode="record">● Record</button>
+      <button class="mode-btn" data-mode="live">Live</button>
+      <button class="mode-btn" data-mode="tab">Tab</button>
+      <button class="mode-btn active" data-mode="file">File</button>
+    </nav>
+
+    <section class="controls">
+      <div class="field">
+        <span class="field__label">Options</span>
+        <div class="opts">
+          <label>
+            lang_id
+            <input
+              type="number"
+              id="langId"
+              value="101"
+              min="0"
+              max="127"
+            />
+          </label>
+          <label>
+            <input type="checkbox" id="stripTag" checked />
+            strip language tag
+          </label>
+          <label>
+            <input type="checkbox" id="vadToggle" checked />
+            VAD
+          </label>
+          <label>
+            beam
+            <select id="beamWidth">
+              <option value="1">1 (greedy)</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+            </select>
+          </label>
+          <label>
+            <input type="checkbox" id="ensureCPU" />
+            force CPU (WASM)
+          </label>
+          <label>
+            <input type="checkbox" id="normalize" checked />
+            normalize audio
+          </label>
+          <span id="langChip" class="lang-chip hidden"></span>
+        </div>
+      </div>
+
+      <!-- RECORD -->
+      <div id="panel-record" class="mode-panel hidden">
+        <div class="mic-row">
+          <button id="recBtn" class="mic-btn is-start">● Record</button>
+          <div class="level-meter">
+            <div id="recLevelFill" class="level-fill"></div>
+          </div>
+          <span id="recTimer" class="timer">0.0s</span>
+        </div>
+        <span class="hint"
+          >Record from your mic, then transcribe on stop (highest
+          accuracy).</span
+        >
+      </div>
+
+      <!-- LIVE -->
+      <div id="panel-live" class="mode-panel hidden">
+        <div class="mic-row">
+          <span id="liveDot" class="live-dot"></span>
+          <button id="liveBtn" class="mic-btn is-start">
+            ● Start listening
+          </button>
+          <div class="level-meter">
+            <div id="liveLevelFill" class="level-fill"></div>
+          </div>
+        </div>
+        <span class="hint"
+          >Real-time streaming — text appears as you speak.</span
+        >
+      </div>
+
+      <!-- TAB -->
+      <div id="panel-tab" class="mode-panel hidden">
+        <div class="mic-row">
+          <span id="tabDot" class="live-dot"></span>
+          <button id="tabBtn" class="mic-btn is-start">
+            ● Capture tab audio
+          </button>
+          <div class="level-meter">
+            <div id="tabLevelFill" class="level-fill"></div>
+          </div>
+        </div>
+        <span class="hint"
+          >Pick a browser tab — its audio is streamed in real-time.</span
+        >
+      </div>
+
+      <!-- FILE -->
+      <div id="panel-file" class="mode-panel">
+        <div class="file-row">
+          <input type="file" id="fileInput" accept="audio/*" />
+          <button id="fileBtn" class="btn-action is-start" disabled>
+            Transcribe
+          </button>
+        </div>
+        <span class="hint"
+          >wav / mp3 / m4a / etc. — decoded and resampled to 16 kHz
+          locally.</span
+        >
+      </div>
+
+      <div class="field field--grow">
+        <span class="field__label">Transcript</span>
+        <div id="transcript" class="response-area response-area--tall is-empty">
+          —
+        </div>
+      </div>
+
+      <button id="diagToggle" class="diag-toggle">▸ diagnostics</button>
+      <div id="diag" class="response-area diag hidden"></div>
+      <button id="clearCacheBtn" class="diag-toggle">
+        ⌫ clear cached model (~750 MB)
+      </button>
+      <button id="benchBtn" class="diag-toggle">
+        ⏱ Benchmark all profiles
+      </button>
+    </section>
+
+    <div class="status-bar">
+      <span class="status-chip"
+        ><span id="statusDot" class="status-dot"></span
+        ><span id="statusText">idle</span></span
+      >
+      <span class="webgpu-tag">WebGPU</span>
+    </div>
+
+    <footer class="footer">
+      Nemotron 3.5 ASR (INT4) via onnxruntime-web · model © NVIDIA · ONNX by
+      onnx-community
+    </footer>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

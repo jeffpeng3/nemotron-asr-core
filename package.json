@@ -1,0 +1,37 @@
+{
+  "name": "nemotron-asr-core",
+  "version": "0.1.1",
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./types.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./types.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "dependencies": {
+    "onnxruntime-web": "1.26.0"
+  },
+  "files": [
+    "src/",
+    "types.d.ts"
+  ],
+  "description": "In-browser ASR using NVIDIA Nemotron 3.5 (FastConformer-RNNT) via onnxruntime-web on WebGPU",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeffpeng3/nemotron-asr-streaming.git"
+  },
+  "keywords": [
+    "asr",
+    "nemotron",
+    "webgpu",
+    "onnx",
+    "speech-recognition",
+    "transcription",
+    "fastconformer",
+    "rnnt"
+  ]
+}
