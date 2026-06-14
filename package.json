@@ -11,9 +11,6 @@
       "default": "./src/index.js"
     }
   },
-  "dependencies": {
-    "onnxruntime-web": "1.26.0"
-  },
   "files": [
     "src/",
     "types.d.ts"
