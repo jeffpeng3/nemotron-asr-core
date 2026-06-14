@@ -1,5 +1,7 @@
 # nemotron-asr-core
 
+[![npm version](https://img.shields.io/npm/v/@jeffpeng3/nemotron-asr-core.svg)](https://www.npmjs.com/package/@jeffpeng3/nemotron-asr-core)
+
 In-browser speech recognition using NVIDIA's Nemotron 3.5 (FastConformer-RNNT)
 via `onnxruntime-web` on WebGPU. Fully client-side — no server needed.
 
