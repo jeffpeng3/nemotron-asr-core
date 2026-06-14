@@ -24,6 +24,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
       - run: |
           git config user.name jeffpeng3
           git config user.email jeffpeng2012@gmail.com
