@@ -11,7 +11,6 @@ export const CONFIG: {
   LOG_GUARD: 1e-10;
   NEW_FRAMES: 56;
   CACHE_FRAMES: 9;
-  LEFT: 70;
   LAYERS: 24;
   D_MODEL: 1024;
   DEC_HID: 640;
@@ -41,11 +40,11 @@ export interface DetokResult {
 export function detok(ids: number[], vocab: string[]): DetokResult;
 
 export const Profiles: {
-  readonly TURBO: { rightContext: 0; encoder: string; encoderData: string };
-  readonly FAST: { rightContext: 1; encoder: string; encoderData: string };
-  readonly BALANCED: { rightContext: 3; encoder: string; encoderData: string };
-  readonly NORMAL: { rightContext: 6; encoder: string; encoderData: string };
-  readonly HIGH: { rightContext: 13; encoder: string; encoderData: string };
+  readonly TURBO: { encoder: string; encoderData: string };
+  readonly FAST: { encoder: string; encoderData: string };
+  readonly BALANCED: { encoder: string; encoderData: string };
+  readonly NORMAL: { encoder: string; encoderData: string };
+  readonly HIGH: { encoder: string; encoderData: string };
 };
 
 export const LANG_TO_ID: Record<string, [id: number, name: string]>;

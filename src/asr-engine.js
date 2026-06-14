@@ -1,4 +1,4 @@
-import * as ort from "onnxruntime-web";
+import * as ort from "onnxruntime-web/webgpu";
 import { CONFIG, Profiles } from "./config.js";
 import {
   buildMelFB,
@@ -173,12 +173,11 @@ export class AsrEngine {
     const p = Profiles[name];
     if (!p) throw new Error(`unknown profile: ${name}`);
     this._profile = name;
-    this._rightContext = p.rightContext;
     this._encName = p.encoder;
     this._encDataName = p.encoderData;
-    this._newFrames = (1 + p.rightContext) * 8;
+    this._newFrames = 56;
     this._cacheFrames = 9;
-    this._encIn = this._newFrames + this._cacheFrames;
+    this._encIn = 65;
   }
 
   get ready() { return this._ready; }
@@ -193,13 +192,7 @@ export class AsrEngine {
 
   async switchProfile(name) {
     this._applyProfile(name);
-    this._ready = false;
-    this._initInFlight = null;
-    await this._releaseSession(this._enc);
-    this._enc = null;
-    this._encBuf = null;
-    this._encTensor = null;
-    await this.init();
+    // All profiles share the same encoder (560ms), no reload needed.
   }
 
   // ── lifecycle ──
@@ -372,8 +365,8 @@ export class AsrEngine {
 
       results.push({
         profile: name,
-        rightContext: p.rightContext,
-        latencyLabel: `${(p.rightContext + 1) * 80}ms`,
+        rightContext: 6,
+        latencyLabel: "560ms",
         processingTimeMs: procMs,
         audioDurationSec: audioSec,
         rtf,
@@ -541,7 +534,7 @@ export class AsrEngine {
   async _newState(langId) {
     const s = {
       langId,
-      cch: new Float32Array(C.LAYERS * C.LEFT * C.D_MODEL),
+      cch: new Float32Array(C.LAYERS * 56 * C.D_MODEL),
       cct: new Float32Array(C.LAYERS * C.D_MODEL * 8),
       ccl: 0,
       h: new Float32Array(C.DEC_LAYERS * C.DEC_HID),
@@ -788,7 +781,7 @@ export class AsrEngine {
     const er = await this._enc.run({
       audio_signal: this._getEncTensor(),
       length: this._i64([length], [1]),
-      cache_last_channel: this._f32(s.cch, [1, C.LAYERS, C.LEFT, C.D_MODEL]),
+      cache_last_channel: this._f32(s.cch, [1, C.LAYERS, 56, C.D_MODEL]),
       cache_last_time: this._f32(s.cct, [1, C.LAYERS, C.D_MODEL, 8]),
       cache_last_channel_len: this._i64([s.ccl], [1]),
       lang_id: this._i64([s.langId], [1]),
@@ -796,10 +789,10 @@ export class AsrEngine {
     if (diag) diag.encoder += performance.now() - t0;
     this._perfEnd("encoderStep", __t);
     const enc = er.outputs.data;
-    const encT = Number(er.encoded_lengths.data[0]);
+    const encT = er.outputs.dims[1];
     s.cch = er.cache_last_channel_next.data;
     s.cct = er.cache_last_time_next.data;
-    s.ccl = Number(er.cache_last_channel_next_len.data[0]);
+    s.ccl = Number(er.cache_last_channel_len_next.data[0]);
     const fbuf = this._encFrameBuf;
     if (this._beamWidth <= 1) {
       await this._greedyDecode(enc, encT, s, fbuf, diag);
