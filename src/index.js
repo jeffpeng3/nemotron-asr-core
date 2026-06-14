@@ -7,4 +7,5 @@ export {
   detok,
 } from "./dsp.js";
 export { AsrEngine, Session } from "./asr-engine.js";
+export { EnergyVAD } from "./vad.js";
 export { LANG_TO_ID, langName, langId } from "./lang.js";

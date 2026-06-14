@@ -7,6 +7,7 @@ import {
   StreamingMel,
   detok,
 } from "./dsp.js";
+import { EnergyVAD } from "./vad.js";
 
 const C = CONFIG;
 const CACHE_NAME = "nemotron-asr-int4-v1";
@@ -18,7 +19,7 @@ const ORT_WASM_CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0/dist/"
 
 export class Session {
   /** @param {import("../types.d.ts").AsrEngine} engine */
-  constructor(engine, langId) {
+  constructor(engine, langId, vadOptions = null) {
     this._engine = engine;
     this._langId = langId;
     this._state = null;
@@ -29,16 +30,34 @@ export class Session {
     this._diag = null;
     this._started = false;
     this._ended = false;
+    this._vad = null;
+    if (vadOptions) {
+      this._vad = new EnergyVAD({
+        ...(typeof vadOptions === "object" ? vadOptions : {}),
+        onSpeechStart: () => this._engine._emit("speechStart"),
+        onSpeechEnd: () => this._engine._emit("speechEnd"),
+      });
+    }
+  }
+
+  get speaking() {
+    return this._vad ? this._vad.active : true;
   }
 
   /**
    * Push audio samples for streaming inference.
    * Returns partial result when enough frames accumulate, or null otherwise.
+   * When VAD is enabled, non-speech audio is silently skipped.
    * @param {Float32Array} samples - 16 kHz PCM audio.
    * @returns {Promise<{text:string, lang:string|null}|null>}
    */
   async feed(samples) {
     if (this._ended) throw new Error("session has ended");
+    if (this._vad) {
+      const level = EnergyVAD.computeRMS(samples);
+      this._vad.process(level, samples.length);
+      if (!this._vad.active) return null;
+    }
     const eng = this._engine;
 
     if (!this._started) {
@@ -113,7 +132,7 @@ export class Session {
 export class AsrEngine {
   /**
    * @param {import("../types.d.ts").AsrEngineCallbacks} [callbacks]
-   * @param {{ profile?: string, beamWidth?: number, ensureCPU?: boolean }} [options]
+   * @param {{ profile?: string, beamWidth?: number, ensureCPU?: boolean, vad?: boolean | import("../types.d.ts").VadOptions }} [options]
    */
   constructor(callbacks = {}, options = {}) {
     this._callbacks = callbacks;
@@ -127,6 +146,7 @@ export class AsrEngine {
     this._applyProfile(options.profile || "NORMAL");
     this._beamWidth = Math.max(1, options.beamWidth || 1);
     this._ensureCPU = !!options.ensureCPU;
+    this._vadOptions = options.vad || null;
     this._emit("status", `beam width: ${this._beamWidth}${this._beamWidth > 1 ? " (beam search)" : " (greedy)"}`);
 
     this._enc = null;
@@ -376,11 +396,14 @@ export class AsrEngine {
 
   /**
    * Create a streaming session for incremental transcription.
+   * When VAD is configured on the engine, it is automatically applied to the session.
    * @param {number} langId
+   * @param {boolean | import("../types.d.ts").VadOptions} [vadOverride] - Override engine-level VAD for this session.
    * @returns {Session}
    */
-  session(langId) {
-    return new Session(this, langId);
+  session(langId, vadOverride) {
+    const vad = vadOverride !== undefined ? vadOverride : this._vadOptions;
+    return new Session(this, langId, vad);
   }
 
   // ── internal: helpers ──

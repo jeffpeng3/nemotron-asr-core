@@ -52,11 +52,21 @@ export const LANG_TO_ID: Record<string, [id: number, name: string]>;
 export function langName(code: string): string | null;
 export function langId(code: string): number | null;
 
+export interface VadOptions {
+  threshold?: number;
+  minSpeech?: number;
+  minSilence?: number;
+  hold?: number;
+  sr?: number;
+}
+
 export interface AsrEngineCallbacks {
   progress?: (label: string, loaded: number, total: number, cached?: boolean) => void;
   status?: (detail: string) => void;
   partial?: (text: string, lang: string | null, progress?: number) => void;
   ep?: (encoder: boolean, ep: string, note?: string) => void;
+  speechStart?: () => void;
+  speechEnd?: () => void;
 }
 
 export interface TranscriptionResult {
@@ -83,8 +93,16 @@ export interface SessionResult {
   } | null;
 }
 
+export declare class EnergyVAD {
+  static computeRMS(samples: Float32Array): number;
+  constructor(opts?: VadOptions);
+  readonly active: boolean;
+  process(level: number, nSamples: number): boolean;
+}
+
 export declare class Session {
-  constructor(engine: AsrEngine, langId: number);
+  constructor(engine: AsrEngine, langId: number, vadOptions?: boolean | VadOptions);
+  readonly speaking: boolean;
   feed(samples: Float32Array): Promise<{ text: string; lang: string | null } | null>;
   end(): Promise<SessionResult | null>;
 }
@@ -120,6 +138,7 @@ export interface AsrEngineOptions {
   profile?: "TURBO" | "FAST" | "BALANCED" | "NORMAL" | "HIGH";
   beamWidth?: number;
   ensureCPU?: boolean;
+  vad?: boolean | VadOptions;
 }
 
 export declare class AsrEngine {
@@ -131,7 +150,7 @@ export declare class AsrEngine {
   init(): Promise<void>;
   switchProfile(name: string): Promise<void>;
   transcribe(samples: Float32Array, langId: number): Promise<TranscriptionResult>;
-  session(langId: number): Session;
+  session(langId: number, vadOverride?: boolean | VadOptions): Session;
   clearCache(): Promise<void>;
   getPerfStats(): Record<string, { ms: number; calls: number; avg: number }>;
   benchmark(options?: BenchmarkOptions): Promise<BenchmarkProfileResult[]>;
