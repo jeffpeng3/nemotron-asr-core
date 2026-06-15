@@ -201,7 +201,16 @@ export class AsrEngine {
     this._enc = await this._createSession(
       this._encName, this._encDataName, [{ name: this._encEP }],
       `encoder (~690 MB, ${this._encEP})`,
-      { freeDimensionOverrides: { time: this._encIn } },
+      {
+        freeDimensionOverrides: { time: this._encIn },
+        preferredOutputLocation: {
+          outputs: "cpu",
+          cache_last_channel_next: "gpu-buffer",
+          cache_last_time_next: "gpu-buffer",
+          cache_last_channel_len_next: "cpu",
+          encoded_lengths: "cpu",
+        },
+      },
     );
   }
 
@@ -244,7 +253,16 @@ export class AsrEngine {
       }
       this._encEP = useGPU ? "webgpu" : "wasm";
       this._emit("ep", true, this._encEP);
-      const encoderOpts = { freeDimensionOverrides: { time: this._encIn } };
+      const encoderOpts = {
+        freeDimensionOverrides: { time: this._encIn },
+        preferredOutputLocation: {
+          outputs: "cpu",
+          cache_last_channel_next: "gpu-buffer",
+          cache_last_time_next: "gpu-buffer",
+          cache_last_channel_len_next: "cpu",
+          encoded_lengths: "cpu",
+        },
+      };
       try {
         this._enc = await this._createSession(
           this._encName, this._encDataName, [{ name: this._encEP }],
@@ -549,6 +567,8 @@ export class AsrEngine {
       langId,
       cch: new Float32Array(C.LAYERS * 56 * C.D_MODEL),
       cct: new Float32Array(C.LAYERS * C.D_MODEL * 8),
+      cchTensor: null,
+      cctTensor: null,
       ccl: 0,
       h: new Float32Array(C.DEC_LAYERS * C.DEC_HID),
       c: new Float32Array(C.DEC_LAYERS * C.DEC_HID),
@@ -794,8 +814,8 @@ export class AsrEngine {
     const er = await this._enc.run({
       audio_signal: this._getEncTensor(),
       length: this._i64([length], [1]),
-      cache_last_channel: this._f32(s.cch, [1, C.LAYERS, 56, C.D_MODEL]),
-      cache_last_time: this._f32(s.cct, [1, C.LAYERS, C.D_MODEL, 8]),
+      cache_last_channel: s.cchTensor || this._f32(s.cch, [1, C.LAYERS, 56, C.D_MODEL]),
+      cache_last_time: s.cctTensor || this._f32(s.cct, [1, C.LAYERS, C.D_MODEL, 8]),
       cache_last_channel_len: this._i64([s.ccl], [1]),
       lang_id: this._i64([s.langId], [1]),
     });
@@ -803,9 +823,18 @@ export class AsrEngine {
     this._perfEnd("encoderStep", __t);
     const enc = er.outputs.data;
     const encT = er.outputs.dims[1];
-    s.cch = er.cache_last_channel_next.data;
-    s.cct = er.cache_last_time_next.data;
     s.ccl = Number(er.cache_last_channel_len_next.data[0]);
+
+    // Swap GPU tensors: dispose old, keep new
+    if (s.cchTensor) s.cchTensor.dispose();
+    if (s.cctTensor) s.cctTensor.dispose();
+    s.cchTensor = er.cache_last_channel_next;
+    s.cctTensor = er.cache_last_time_next;
+
+    // Keep CPU copies for session recreation (profile switch)
+    s.cch.set(await er.cache_last_channel_next.getData());
+    s.cct.set(await er.cache_last_time_next.getData());
+
     const fbuf = this._encFrameBuf;
     if (this._beamWidth <= 1) {
       await this._greedyDecode(enc, encT, s, fbuf, diag);
