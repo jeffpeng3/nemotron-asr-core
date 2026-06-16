@@ -127,6 +127,7 @@ async function handle(m) {
         duration: m.duration ?? 10,
         samples: samp,
         beamWidths: m.beamWidths || [1],
+        blankPenalty: m.blankPenalty,
       });
       const totalMs = performance.now() - t0;
       post({ type: "benchmark", results, totalMs });

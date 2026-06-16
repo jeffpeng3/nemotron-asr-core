@@ -146,6 +146,7 @@ export class AsrEngine {
 
     this._applyProfile(options.profile || "NORMAL");
     this._beamWidth = Math.max(1, options.beamWidth || 1);
+    this._blankPenalty = options.blankPenalty ?? 0;
     this._vadOptions = options.vad || null;
     this._emit("status", `beam width: ${this._beamWidth}${this._beamWidth > 1 ? " (beam search)" : " (greedy)"}`);
 
@@ -352,6 +353,8 @@ export class AsrEngine {
     const FAST_FIRST = ["HIGH", "NORMAL", "BALANCED", "FAST", "TURBO"];
     const { profiles = FAST_FIRST, duration = 10, langId = 101, warmup = true, forceAll = false } = opts;
     const beamWidths = opts.beamWidths || [1];
+    const blankPenalty = opts.blankPenalty;
+    if (blankPenalty !== undefined) this._blankPenalty = blankPenalty;
     if (!this._ready) await this.init();
 
     const sr = C.SR;
@@ -393,6 +396,7 @@ export class AsrEngine {
         results.push({
           profile: name,
           beamWidth: bw,
+          blankPenalty: this._blankPenalty,
           rightContext: 6,
           latencyLabel: `${p.latencyMs}ms`,
           processingTimeMs: procMs,
@@ -808,7 +812,7 @@ export class AsrEngine {
         }
 
         const bb = toBeam(beams[b]);
-        bb.score += logits[C.BLANK];
+        bb.score += logits[C.BLANK] - this._blankPenalty;
         candidates.push(bb);
       }
 

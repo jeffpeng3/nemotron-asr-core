@@ -207,9 +207,10 @@ worker.onmessage = (e) => {
       setStatus("model ready", "online");
       log("benchmark complete:", "ok");
       const durStr = results.length ? results[0].audioDurationSec.toFixed(1) + " s audio" : "";
+      const bp = results.length ? results[0].blankPenalty : 0;
       const sep = "─".repeat(68);
       const lines = [];
-      lines.push(`Benchmark RTF — ${durStr}`);
+      lines.push(`Benchmark RTF — ${durStr}  (blankPenalty=${bp})`);
       lines.push(sep);
       lines.push(`Profile     Beam  RTF      Time     Text`);
       lines.push(sep);
@@ -335,7 +336,7 @@ els.benchBtn.addEventListener("click", async () => {
   }
   log(`benchmark started — running all 5 profiles on ${label}`, "dim");
   try {
-    const msg = { type: "benchmark", duration: 10, beamWidths: [1, 2, 3] };
+    const msg = { type: "benchmark", duration: 10, beamWidths: [1, 2, 3], blankPenalty: 0.3 };
     if (samplesBuf) msg.samples = samplesBuf;
     worker.postMessage(msg, samplesBuf ? [samplesBuf] : []);
   } catch (err) {
