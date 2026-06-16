@@ -351,6 +351,7 @@ export class AsrEngine {
   async benchmark(opts = {}) {
     const FAST_FIRST = ["HIGH", "NORMAL", "BALANCED", "FAST", "TURBO"];
     const { profiles = FAST_FIRST, duration = 10, langId = 101, warmup = true, forceAll = false } = opts;
+    const beamWidths = opts.beamWidths || [1];
     if (!this._ready) await this.init();
 
     const sr = C.SR;
@@ -371,33 +372,42 @@ export class AsrEngine {
 
       if (warmup) {
         const short = Math.min(sr, audio.length);
+        this._beamWidth = 1;
         await this.transcribe(audio.subarray(0, short), langId);
       }
 
-      this._perfStats = {};
-      const t0 = performance.now();
-      const r = await this.transcribe(audio, langId);
-      const procMs = performance.now() - t0;
-      const rtf = procMs / 1000 / audioSec;
+      for (const bw of beamWidths) {
+        if (bw < 1) continue;
+        this._beamWidth = bw;
+        const bwLabel = bw === 1 ? "greedy" : `beam=${bw}`;
 
-      this._emit("status", `[bench] ${name}: ${rtf.toFixed(3)} RTF`);
-      this._emit("perf", { stats: this.getPerfStats(), profile: name });
+        this._perfStats = {};
+        const t0 = performance.now();
+        const r = await this.transcribe(audio, langId);
+        const procMs = performance.now() - t0;
+        const rtf = procMs / 1000 / audioSec;
 
-      results.push({
-        profile: name,
-        rightContext: 6,
-        latencyLabel: `${p.latencyMs}ms`,
-        processingTimeMs: procMs,
-        audioDurationSec: audioSec,
-        rtf,
-        text: r.text,
-        lang: r.lang,
-        tokens: r.tokens,
-        timing: r.timing,
-      });
+        this._emit("status", `[bench] ${name} (${bwLabel}): ${rtf.toFixed(3)} RTF`);
+        this._emit("perf", { stats: this.getPerfStats(), profile: `${name} ${bwLabel}` });
 
-      if (rtf > 1 && !forceAll) {
-        this._emit("status", `[bench] stopping — ${name} RTF ${rtf.toFixed(3)} > 1`);
+        results.push({
+          profile: name,
+          beamWidth: bw,
+          rightContext: 6,
+          latencyLabel: `${p.latencyMs}ms`,
+          processingTimeMs: procMs,
+          audioDurationSec: audioSec,
+          rtf,
+          text: r.text,
+          lang: r.lang,
+          tokens: r.tokens,
+          timing: r.timing,
+        });
+      }
+
+      const minRtf = results.filter(r => r.profile === name).reduce((a, r) => Math.min(a, r.rtf), Infinity);
+      if (minRtf > 1 && !forceAll) {
+        this._emit("status", `[bench] stopping — ${name} RTF > 1`);
         break;
       }
     }

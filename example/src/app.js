@@ -203,35 +203,32 @@ worker.onmessage = (e) => {
       break;
     case "benchmark": {
       const results = m.results || [];
+      const totalMs = m.totalMs || 0;
       setStatus("model ready", "online");
       log("benchmark complete:", "ok");
       const durStr = results.length ? results[0].audioDurationSec.toFixed(1) + " s audio" : "";
-      const sep = "─".repeat(56);
+      const sep = "─".repeat(68);
       const lines = [];
       lines.push(`Benchmark RTF — ${durStr}`);
       lines.push(sep);
+      lines.push(`Profile     Beam  RTF      Time     Text`);
+      lines.push(sep);
       for (const r of results) {
-        const text = (r.text || "").slice(0, 40).replace(/\n/g, " ");
-        const textPad = text.padEnd(42);
+        const text = (r.text || "").slice(0, 38).replace(/\n/g, " ");
+        const bwLabel = r.beamWidth === 1 ? "greedy" : `beam=${r.beamWidth}`;
         lines.push(
-          `${r.profile.padEnd(10)} ${r.latencyLabel.padEnd(7)} RTF ${r.rtf.toFixed(3)}  ${r.processingTimeMs.toFixed(0)} ms  ${textPad}`,
+          `${r.profile.padEnd(12)} ${bwLabel.padEnd(6)} ${r.rtf.toFixed(3).padStart(6)}  ${r.processingTimeMs.toFixed(0).padStart(6)}ms  ${text}`,
         );
       }
       lines.push(sep);
       const best = results.reduce((a, b) => (a.rtf < b.rtf ? a : b));
-      lines.push(`Fastest: ${best.profile}  RTF ${best.rtf.toFixed(3)}`);
-      results.sort((a, b) => a.rtf - b.rtf);
-      const bar = 30;
-      for (const r of results) {
-        const w = Math.round(r.rtf / results[results.length - 1].rtf * bar);
-        lines.push(
-          `${r.profile.padEnd(10)} ${r.latencyLabel.padEnd(7)} ${"█".repeat(Math.max(1, w))}`,
-        );
-      }
+      const bestBw = best.beamWidth === 1 ? "greedy" : `beam=${best.beamWidth}`;
+      lines.push(`Fastest: ${best.profile} (${bestBw})  RTF ${best.rtf.toFixed(3)}  │  total: ${(totalMs / 1000).toFixed(1)}s`);
       setTranscript(lines.join("\n"), null);
       for (const r of results) {
+        const bwLabel = r.beamWidth === 1 ? "greedy" : `beam=${r.beamWidth}`;
         log(
-          `${r.profile} (${r.latencyLabel}) · RTF ${r.rtf.toFixed(3)} · ${r.processingTimeMs.toFixed(0)} ms for ${r.audioDurationSec.toFixed(1)} s · "${(r.text || "").slice(0, 60)}"`,
+          `${r.profile} (${r.latencyLabel}) ${bwLabel} · RTF ${r.rtf.toFixed(3)} · ${r.processingTimeMs.toFixed(0)} ms for ${r.audioDurationSec.toFixed(1)} s · "${(r.text || "").slice(0, 60)}"`,
           "dim",
         );
       }
@@ -338,7 +335,7 @@ els.benchBtn.addEventListener("click", async () => {
   }
   log(`benchmark started — running all 5 profiles on ${label}`, "dim");
   try {
-    const msg = { type: "benchmark", duration: 10, beamWidth: parseInt(els.beamWidth.value) };
+    const msg = { type: "benchmark", duration: 10, beamWidths: [1, 2, 3] };
     if (samplesBuf) msg.samples = samplesBuf;
     worker.postMessage(msg, samplesBuf ? [samplesBuf] : []);
   } catch (err) {

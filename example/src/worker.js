@@ -119,15 +119,17 @@ async function handle(m) {
       break;
     }
     case "benchmark": {
-      if (!engine) engine = makeEngine("HIGH", m.beamWidth || 1);
-      if (m.beamWidth != null) {
-        engine._beamWidth = m.beamWidth;
-        post({ type: "status", detail: `beam width: ${m.beamWidth}${m.beamWidth > 1 ? " (beam search)" : " (greedy)"}` });
-      }
+      if (!engine) engine = makeEngine("HIGH", 1);
       await (engine.ready ? Promise.resolve() : engine.init());
-      const samples = m.samples ? new Float32Array(m.samples) : null;
-      const results = await engine.benchmark({ duration: m.duration ?? 10, samples });
-      post({ type: "benchmark", results });
+      const samp = m.samples ? new Float32Array(m.samples) : null;
+      const t0 = performance.now();
+      const results = await engine.benchmark({
+        duration: m.duration ?? 10,
+        samples: samp,
+        beamWidths: m.beamWidths || [1],
+      });
+      const totalMs = performance.now() - t0;
+      post({ type: "benchmark", results, totalMs });
       break;
     }
     case "clearCache": {
