@@ -1,6 +1,6 @@
 {
   "name": "@jeffpeng3/nemotron-asr-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "./src/index.js",
   "types": "./types.d.ts",
